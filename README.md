@@ -145,7 +145,7 @@ unanswered, so the wearer is never racing the replay.
 of the simulator's framebuffer:
 
 ```bash
-python3 -I demo/capture.py && python3 -I demo/render.py
+python3 -I demo/capture.py && python3 demo/render.py
 ```
 
 `narrate.py` lays a voiceover over the result, timed against the video's own

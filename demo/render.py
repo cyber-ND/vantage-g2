@@ -6,7 +6,11 @@ wearer sees - no recolouring, no redrawing. Captions, a title and an end card
 are composited in Pillow and ffmpeg only encodes, which keeps this working on
 an ffmpeg built without drawtext.
 
-  python3 -I demo/render.py [--out demo/vantage-demo.mp4]
+  python3 demo/render.py [--out demo/vantage-demo.mp4]
+
+Needs ffmpeg on PATH and Pillow (pip3 install --user Pillow). Run it with
+plain `python3`, not `python3 -I` - isolated mode drops the user site
+directory that `pip3 install --user` puts Pillow in.
 """
 import json
 import os
