@@ -148,6 +148,11 @@ of the simulator's framebuffer:
 python3 -I demo/capture.py && python3 -I demo/render.py
 ```
 
+`narrate.py` lays a voiceover over the result, timed against the video's own
+clock rather than the captions — a line may run across a caption boundary, it
+just may not run into the next line, and `--script` prints the timings so the
+narration can be re-recorded in a human voice instead.
+
 `capture.py` drives the real app through the simulator's touchpad API and
 speaks the voice commands out of the Mac's speakers into the microphone the
 simulator is listening on, so the microphone path in the video is the one a
