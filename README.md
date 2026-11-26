@@ -123,6 +123,38 @@ Replay the learning curve on collected data, no network needed:
 python3 -I agent/replay.py
 ```
 
+### Demo mode
+
+The agent is *supposed* to be quiet. In one recent 24-hour stretch it judged
+465 polls worth of market activity and raised a single card — which is the
+product working, and is also impossible to film. So the server can take its
+ticks from the recorded window instead of from the network, on a compressed
+clock:
+
+```bash
+python3 -I agent/server.py --port 8787 --budget 6 --replay 900
+```
+
+Nothing about that is synthetic. Every snapshot is a real quote collected
+from mainnet by `collect.py`, replayed in its original order through the same
+`Watcher`, the same `EventAgent` and the same `publish()` the live poller
+uses. Only the clock changes — and the feeder pauses whenever a card is
+unanswered, so the wearer is never racing the replay.
+
+`demo/vantage-demo.mp4` is recorded from that, frame by frame, straight out
+of the simulator's framebuffer:
+
+```bash
+python3 -I demo/capture.py && python3 -I demo/render.py
+```
+
+`capture.py` drives the real app through the simulator's touchpad API and
+speaks the voice commands out of the Mac's speakers into the microphone the
+simulator is listening on, so the microphone path in the video is the one a
+wearer would use. `render.py` composites the captured frames — they are pure
+green with the glyphs in the alpha channel, so over black they are exactly
+what the wearer sees — and adds the captions.
+
 ### Backend endpoints
 
 | | |
@@ -204,6 +236,13 @@ Reading `eventType` and bailing when it is missing — the obvious
 implementation, and the one written here first — silently breaks tap while
 long-press keeps working. `LONG_PRESS_RELEASE` is ignored on purpose, or one
 gesture fires the handler twice.
+
+The WebView polls `/card` once a second, not every four. The gap between the
+agent deciding and the wearer seeing it is dead time they cannot act in, and
+a card on a market that settles in five minutes cannot afford to spend four
+seconds of it waiting for the next poll. (At four seconds this was also
+visible in the demo recording: the narration described a card the display had
+not drawn yet.)
 
 One behaviour worth naming: the poller will **not** replace a card the wearer
 has not answered yet. Swapping the display mid-glance is how you make a
@@ -479,7 +518,7 @@ precisely, by last-modified date:
 | when | what |
 |---|---|
 | **18–19 Nov** (after announcement, before the build window) | the Hyperliquid data layer and model work: `agent/hl.py`, `agent/fair.py`, `agent/policy.py`, `agent/scan.py`, `agent/backtest.py`, `agent/collect.py`, `agent/learn_demo.py`, `agent/events.py`, `agent/replay.py`, `app.json`, and the vendored SDK in `web/` |
-| **23–29 Nov** (build window) | the product: `agent/server.py`, `agent/voice.py`, `web/glasses.js`, `web/index.html`, `web/voice.js`, this README, and the five days of forward collection the results above are measured on |
+| **23–29 Nov** (build window) | the product: `agent/server.py`, `agent/voice.py`, `web/glasses.js`, `web/index.html`, `web/voice.js`, `demo/`, this README, and the five days of forward collection the results above are measured on |
 
 The split is roughly: the first two days answered *"is there anything here?"*
 and produced the finding that killed the trading premise. The build week

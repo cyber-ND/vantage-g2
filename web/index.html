@@ -105,8 +105,12 @@ async function poll() {
     el.innerHTML = '<div class="empty">backend offline</div>';
   }
 }
+// One second, not four. On a heads-up display the gap between the agent
+// deciding and the wearer seeing it is dead time they cannot act in, and a
+// card that resolves in five minutes cannot afford to spend four seconds
+// waiting for the next poll.
 poll();
-setInterval(poll, 4000);
+setInterval(poll, 1000);
 
 // Input: the SDK surfaces taps/ring events. Wired to the agent's learning
 // signal - every accept/dismiss is a labelled training example.

@@ -79,6 +79,85 @@ def snapshot_of(m, yb, ya):
     }
 
 
+def publish(evs, agent, now, seen_rate):
+    """DECIDE: hand the agent the events and put at most one card on glass."""
+    with LOCK:
+        STATE["polls"] += 1
+        STATE["events_seen"] += len(evs)
+        STATE["last_poll"] = now.isoformat()
+        STATE["error"] = None
+        # Do not replace a card the wearer has not answered yet - swapping it
+        # out mid-glance is how you make a display impossible to trust.
+        if STATE["card"] is not None:
+            return
+        card = agent.choose(evs, now=now, seen_per_hour=seen_rate)
+        if not card:
+            return
+        STATE["event"] = card
+        STATE["card"] = {
+            "label": card.label,
+            "mid": card.mid,
+            "detail": card.detail(),
+            "kind": card.kind,
+            "why": card.why,
+            "score": round(card.score, 3),
+            "index": card.index,
+        }
+        STATE["cards"] += 1
+        print(f"{now:%H:%M:%S}  CARD  {card.headline()}  {card.detail()}  "
+              f"(score {card.score:.2f})", flush=True)
+
+
+def replayer(agent, watcher, speed=600.0):
+    """Feed recorded market snapshots through the live decision path.
+
+    Same Watcher, same EventAgent, same publish() as the mainnet poller - the
+    only difference is where the ticks come from and how fast the clock runs.
+
+    This exists because the agent is *supposed* to be quiet: in one recent
+    24h stretch it judged 465 polls worth of market activity and raised a
+    single card. That is the product working, and it is also impossible to
+    film. Replay compresses the recorded window so a demo can show the whole
+    perceive -> decide -> learn cycle in a couple of minutes.
+
+    Nothing here is synthetic. Every snapshot is a real quote collected from
+    Hyperliquid mainnet by agent/collect.py, replayed in its original order.
+    """
+    import replay as replaymod
+
+    snaps = replaymod.snapshots()
+    if not snaps:
+        print("replay: no observations to replay", flush=True)
+        return
+    t0 = datetime.fromisoformat(snaps[0]["ts"])
+    span = (datetime.fromisoformat(snaps[-1]["ts"]) - t0).total_seconds()
+    print(f"replay: {len(snaps)} recorded snapshots over {span/3600:.1f}h, "
+          f"{speed:.0f}x", flush=True)
+
+    raw = 0
+    started = time.time()
+    for s in snaps:
+        now = datetime.fromisoformat(s["ts"])
+        # keep the compressed clock honest rather than sleeping a fixed step
+        due = (now - t0).total_seconds() / speed
+        behind = due - (time.time() - started)
+        if behind > 0:
+            time.sleep(min(behind, 5.0))
+        # hold the window while a card is unanswered, so the wearer is never
+        # racing the replay to tap something
+        while True:
+            with LOCK:
+                if STATE["card"] is None:
+                    break
+            time.sleep(0.25)
+            started += 0.25
+        evs = watcher.update(s)
+        raw += len(evs)
+        hours = max((now - t0).total_seconds() / 3600.0, 1e-9)
+        publish(evs, agent, now, raw / hours)
+    print("replay: window exhausted", flush=True)
+
+
 def poller(url, interval, agent, watcher):
     """PERCEIVE + DECIDE, forever."""
     meta_at, markets = 0.0, []
@@ -111,32 +190,8 @@ def poller(url, interval, agent, watcher):
                 snap["ttl_h"] = ttl_h
                 evs.extend(watcher.update(snap))
 
-            with LOCK:
-                STATE["polls"] += 1
-                STATE["events_seen"] += len(evs)
-                STATE["last_poll"] = now.isoformat()
-                STATE["error"] = None
-                # Do not replace a card the wearer has not answered yet -
-                # swapping it out mid-glance is how you make a display
-                # impossible to trust.
-                if STATE["card"] is None:
-                    seen_rate = len(live) * (3600.0 / max(interval, 1))
-                    card = agent.choose(evs, now=now, seen_per_hour=seen_rate)
-                    if card:
-                        STATE["event"] = card
-                        STATE["card"] = {
-                            "label": card.label,
-                            "mid": card.mid,
-                            "detail": card.detail(),
-                            "kind": card.kind,
-                            "why": card.why,
-                            "score": round(card.score, 3),
-                            "index": card.index,
-                        }
-                        STATE["cards"] += 1
-                        print(f"{now:%H:%M:%S}  CARD  {card.headline()}  "
-                              f"{card.detail()}  (score {card.score:.2f})",
-                              flush=True)
+            seen_rate = len(live) * (3600.0 / max(interval, 1))
+            publish(evs, agent, now, seen_rate)
         except Exception as e:  # noqa: BLE001 - the poller must never die
             with LOCK:
                 STATE["error"] = str(e)
@@ -261,12 +316,20 @@ def main():
     interval = int(args[args.index("--interval") + 1]) if "--interval" in args else 60
     budget = int(args[args.index("--budget") + 1]) if "--budget" in args else 6
 
+    replay_speed = (float(args[args.index("--replay") + 1])
+                    if "--replay" in args else None)
+
     agent = EventAgent(weights=load_weights(), budget_per_hour=budget)
     watcher = Watcher()
     Handler.agent = agent
 
-    t = threading.Thread(target=poller, args=(hl.MAINNET, interval, agent, watcher),
-                         daemon=True)
+    if replay_speed:
+        t = threading.Thread(target=replayer,
+                             args=(agent, watcher, replay_speed), daemon=True)
+    else:
+        t = threading.Thread(target=poller,
+                             args=(hl.MAINNET, interval, agent, watcher),
+                             daemon=True)
     t.start()
 
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)

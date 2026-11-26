@@ -7,3 +7,5 @@ node_modules/
 __pycache__/
 *.pyc
 .DS_Store
+# capture intermediates - thousands of PNGs; the rendered mp4 is committed
+demo/recording/
