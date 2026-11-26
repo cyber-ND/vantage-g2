@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=576, initial-scale=1">
+<title>Vantage</title>
+<style>
+  /* G2: 576 x 288 per eye, monochrome green. Design for one glance. */
+  :root { --fg: #7CFFB2; --dim: #3F8F63; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 576px; height: 288px; background: #000; overflow: hidden; }
+  body {
+    color: var(--fg);
+    font: 400 28px/1.25 -apple-system, "SF Pro Text", system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-font-smoothing: none;
+  }
+  #card { width: 100%; padding: 0 28px; }
+  .row { display: flex; align-items: baseline; justify-content: space-between; }
+  .label { font-size: 40px; font-weight: 600; letter-spacing: -0.5px;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side  { font-size: 40px; font-weight: 600; margin-left: 16px; }
+  .edge  { font-size: 30px; margin-top: 10px; }
+  .why   { font-size: 22px; color: var(--dim); margin-top: 14px;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .act   { font-size: 26px; margin-top: 22px; }
+  .act b { font-weight: 600; }
+  .empty { font-size: 30px; color: var(--dim); text-align: center; }
+</style>
+</head>
+<body>
+  <div id="card"><div class="empty">Vantage &middot; watching</div></div>
+
+<script type="module">
+// One card at a time. Never a dashboard - the display is 576x288 and the
+// user is walking. Rendering is deliberately dumb; the agent decides.
+import { Glasses, linesFor } from './glasses.js';
+import { Voice } from './voice.js';
+
+const el = document.getElementById('card');
+
+// The DOM below is the phone-side preview and the browser dev surface.
+// What the WEARER sees is pushed through the SDK by Glasses - see glasses.js.
+const glasses = new Glasses();
+let glassesReady = false;
+let voice = null;
+// While a voice reply is on screen, card polling must not overwrite it.
+let holdUntil = 0;
+
+glasses.connect().then(() => {
+  glassesReady = true;
+  voice = new Voice(glasses, API);
+  glasses.onInput(onGesture);
+  console.log('[vantage] glasses containers created');
+}).catch(e => console.warn('[vantage] no glasses bridge:', e?.message || e));
+
+// tap = act on the card, long press = dismiss, double tap = talk
+function onGesture(kind) {
+  if (kind === 'voice') return startVoice();
+  act(kind);
+}
+
+async function startVoice() {
+  if (!voice) return;
+  await voice.toggle(async (line) => {
+    holdUntil = Date.now() + 4000;
+    el.querySelector('.edge')?.replaceChildren(document.createTextNode(line));
+    if (glassesReady) await glasses.show({ head: 'Vantage', detail: line, hint: '' });
+  });
+}
+
+// Served by the backend itself -> same origin. Loaded from a dev server for
+// the simulator -> the backend is on 8787, which app.json whitelists.
+const API = (location.port === '8787') ? '' : 'http://localhost:8787';
+
+// The card is an EVENT, not a recommendation. The agent does not claim to
+// price these better than the market - measurement said it cannot. It claims
+// only that this moment is worth your attention, and the tap tells it whether
+// it was right about that.
+function render(c) {
+  if (!c) {
+    el.innerHTML = '<div class="empty">Nothing worth your attention</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="row">
+      <div class="label">${esc(c.label)}</div>
+      <div class="side">${Math.round(c.mid * 100)}%</div>
+    </div>
+    <div class="edge">${esc(c.detail)}</div>
+    <div class="why">${esc((c.why || []).join(', '))}</div>
+    <div class="act"><b>Tap</b> open &nbsp;&middot;&nbsp; <b>Hold</b> not now</div>`;
+}
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, m =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+
+async function poll() {
+  try {
+    const r = await fetch(API + '/card', { cache: 'no-store' });
+    const card = (await r.json()).card;
+    render(card);
+    if (glassesReady && Date.now() > holdUntil) await glasses.show(linesFor(card));
+  } catch (e) {
+    el.innerHTML = '<div class="empty">backend offline</div>';
+  }
+}
+poll();
+setInterval(poll, 4000);
+
+// Input: the SDK surfaces taps/ring events. Wired to the agent's learning
+// signal - every accept/dismiss is a labelled training example.
+window.addEventListener('keydown', e => {
+  if (e.key === 'Enter') act('accept');
+  if (e.key === 'Escape') act('dismiss');
+});
+function act(kind) {
+  fetch(API + '/act', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: kind })
+  }).then(poll).catch(() => {});
+}
+</script>
+</body>
+</html>

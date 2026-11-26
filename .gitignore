@@ -1,0 +1,9 @@
+# whisper model - 147MB, fetched by the command in the README
+agent/models/
+# runtime logs
+*.log
+# deps (package.json pins them; the SDK itself is vendored in web/)
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store

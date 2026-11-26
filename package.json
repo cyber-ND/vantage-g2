@@ -1,0 +1,17 @@
+{
+  "name": "vantage",
+  "version": "1.0.0",
+  "description": "An agent that watches prediction markets and interrupts you only when it has something worth a glance. Built for Even Realities G2.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "^0.0.16",
+    "@evenrealities/pretext": "^0.1.4"
+  }
+}

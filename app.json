@@ -1,0 +1,23 @@
+{
+  "package_id": "com.vantage.g2",
+  "edition": "202601",
+  "name": "Vantage",
+  "version": "0.1.0",
+  "min_app_version": "2.2.10",
+  "min_sdk_version": "0.0.16",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Reads live outcome-market prices and sends your confirmations to the Vantage backend.",
+      "whitelist": [
+        "http://localhost:8787",
+        "https://api.hyperliquid.xyz",
+        "https://api.hyperliquid-testnet.xyz"
+      ]
+    }
+  ],
+  "supported_languages": [
+    "en"
+  ]
+}
